@@ -564,7 +564,9 @@ def fetch_population_from_wikidata(session, row):
     return None
 
 
-def enrich_places_with_population(places_gdf, log_signal, cache_base_path=None):
+def enrich_places_with_population(places_gdf, log_signal, cache_base_path=None, max_wikidata_requests=None):
+    if max_wikidata_requests is None:
+        max_wikidata_requests = MAX_WIKIDATA_REQUESTS_PER_RUN
     if places_gdf.empty:
         return places_gdf
 
@@ -601,15 +603,15 @@ def enrich_places_with_population(places_gdf, log_signal, cache_base_path=None):
     requests_made = 0
 
     for index in places[unresolved_mask].index:
-        if requests_made >= MAX_WIKIDATA_REQUESTS_PER_RUN:
+        if requests_made >= max_wikidata_requests:
             log_signal.emit(
-                f"Лимит Wikidata за запуск достигнут: {MAX_WIKIDATA_REQUESTS_PER_RUN} запросов. Остальные значения останутся пустыми."
+                f"Лимит Wikidata за запуск достигнут: {max_wikidata_requests} запросов. Остальные значения останутся пустыми."
             )
             break
 
         row = places.loc[index]
         log_signal.emit(
-            f"Wikidata: запрос {requests_made + 1} из {min(unresolved_total, MAX_WIKIDATA_REQUESTS_PER_RUN)} — {row['name']}"
+            f"Wikidata: запрос {requests_made + 1} из {min(unresolved_total, max_wikidata_requests)} — {row['name']}"
         )
         try:
             population = fetch_population_from_wikidata(session, row)
@@ -640,9 +642,9 @@ def deduplicate_places(places_gdf):
     places["_dedupe_key"] = (
         places["normalized_name"]
         + "|"
-        + places.geometry.x.round(3).astype(str)
+        + places.geometry.x.round(1).astype(str)
         + "|"
-        + places.geometry.y.round(3).astype(str)
+        + places.geometry.y.round(1).astype(str)
     )
     places["_has_population"] = places["source_population"].notna()
     places = places.sort_values(
@@ -1376,6 +1378,7 @@ class PopulationWorker(QThread):
                     places_wgs84,
                     self.log_signal,
                     cache_base_path=shp_path,
+                    max_wikidata_requests=self.max_places,
                 )
                 places_for_html = pd.DataFrame(
                     {
