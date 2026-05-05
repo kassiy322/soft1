@@ -677,7 +677,7 @@ def build_population_html(places_gdf, cost_mode):
         rows = []
         for _, row in display_df.iterrows():
             rows.append(
-                "<tr>"
+                f"<tr data-type=\"{escape(str(row['place_type'] or ''))}\">"
                 f"<td>{escape(str(row['name']))}</td>"
                 f"<td>{escape(str(row['place_type'] or '—'))}</td>"
                 f"<td>{row['lat']:.5f}</td>"
@@ -701,6 +701,14 @@ def build_population_html(places_gdf, cost_mode):
               <th>Долгота</th>
               <th>Население</th>
               <th>{metric_header}</th>
+            </tr>
+            <tr class="filter-row">
+              <th></th>
+              <th><div class="filter-dropdown" id="type-filter-wrap"><button class="filter-btn" id="type-filter-btn">\u0412\u0441\u0435 \u25bc</button><div class="filter-menu" id="type-filter-menu"></div></div></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>{rows_html}</tbody>
@@ -772,9 +780,168 @@ def build_population_html(places_gdf, cost_mode):
         top: 0;
         background: #f3f6f8;
       }
+      .filter-row th {
+        background: #e8ecf0 !important;
+        padding: 4px 6px !important;
+      }
+      .filter-dropdown {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+      }
+      .filter-btn {
+        width: 100%;
+        font-size: 12px;
+        padding: 4px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .filter-btn:hover {
+        background: #f0f0f0;
+      }
+      .filter-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        min-width: 160px;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        padding: 4px 0;
+      }
+      .filter-menu.open {
+        display: block;
+      }
+      .filter-menu label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        font-size: 13px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .filter-menu label:hover {
+        background: #f0f4f8;
+      }
+      .filter-menu input[type="checkbox"] {
+        margin: 0;
+        cursor: pointer;
+      }
+      .filter-menu .filter-divider {
+        border-top: 1px solid #e0e0e0;
+        margin: 4px 0;
+      }
+      #population-table-panel thead th:first-child {
+        top: 0;
+      }
+      .filter-row th {
+        top: 33px;
+        z-index: 1;
+      }
     </style>
     """
-    return styles + summary_html + table_html
+    filter_script = """
+    <script>
+    (function() {
+      var table = document.querySelector("#population-table-panel table");
+      if (!table) return;
+      var tbody = table.querySelector("tbody");
+      var rows = Array.from(tbody.querySelectorAll("tr"));
+      var btn = document.getElementById("type-filter-btn");
+      var menu = document.getElementById("type-filter-menu");
+      if (!btn || !menu) return;
+
+      var types = {};
+      rows.forEach(function(r) {
+        var t = (r.getAttribute("data-type") || "").trim();
+        if (t) types[t] = true;
+      });
+      var sortedTypes = Object.keys(types).sort();
+      var checkedTypes = {};
+      sortedTypes.forEach(function(t) { checkedTypes[t] = true; });
+
+      var allLabel = document.createElement("label");
+      var allCb = document.createElement("input");
+      allCb.type = "checkbox";
+      allCb.checked = true;
+      allCb.dataset.all = "1";
+      allLabel.appendChild(allCb);
+      allLabel.appendChild(document.createTextNode(" \u0412\u0441\u0435"));
+      menu.appendChild(allLabel);
+
+      var divider = document.createElement("div");
+      divider.className = "filter-divider";
+      menu.appendChild(divider);
+
+      var checkboxes = [];
+      sortedTypes.forEach(function(t) {
+        var label = document.createElement("label");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = t;
+        cb.checked = true;
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(" " + t));
+        menu.appendChild(label);
+        checkboxes.push(cb);
+      });
+
+      function applyFilter() {
+        var active = [];
+        checkboxes.forEach(function(cb) {
+          if (cb.checked) active.push(cb.value);
+        });
+        var showAll = active.length === sortedTypes.length;
+        rows.forEach(function(r) {
+          var t = (r.getAttribute("data-type") || "").trim();
+          r.style.display = (showAll || active.indexOf(t) !== -1) ? "" : "none";
+        });
+        if (showAll) {
+          btn.textContent = "\u0412\u0441\u0435 \u25bc";
+        } else if (active.length === 0) {
+          btn.textContent = "\u041d\u0435\u0442 \u25bc";
+        } else {
+          btn.textContent = active.join(", ") + " \u25bc";
+        }
+        allCb.checked = showAll;
+      }
+
+      allCb.addEventListener("change", function() {
+        checkboxes.forEach(function(cb) { cb.checked = allCb.checked; });
+        applyFilter();
+      });
+
+      checkboxes.forEach(function(cb) {
+        cb.addEventListener("change", applyFilter);
+      });
+
+      btn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        menu.classList.toggle("open");
+      });
+
+      document.addEventListener("click", function(e) {
+        if (!menu.contains(e.target) && e.target !== btn) {
+          menu.classList.remove("open");
+        }
+      });
+    })();
+    </script>
+    """
+
+    return styles + summary_html + table_html + filter_script
 
 
 def inject_population_html(output_file, html_block):
