@@ -1027,8 +1027,8 @@ def build_population_html(places_gdf, cost_mode):
             });
             csvRows.push(cells.join(";"));
           });
-          var bom = "\uFEFF";
-          var csv = bom + csvRows.join("\n");
+          var bom = "\\uFEFF";
+          var csv = bom + csvRows.join("\\n");
           var blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
           var url = URL.createObjectURL(blob);
           var a = document.createElement("a");
