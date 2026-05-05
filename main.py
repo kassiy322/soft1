@@ -690,7 +690,7 @@ def build_population_html(places_gdf, cost_mode):
 
     table_html = f"""
     <div id="population-table-panel">
-      <div class="population-title">Таблица населенных пунктов</div>
+      <div class="population-title">Таблица населенных пунктов <button class="export-btn" id="export-csv-btn">Экспорт CSV</button></div>
       <div class="population-table-wrap">
         <table>
           <thead>
@@ -737,6 +737,7 @@ def build_population_html(places_gdf, cost_mode):
       #population-table-panel {
         bottom: 16px;
         width: min(1100px, calc(100vw - 32px));
+        min-height: 120px;
         max-height: 42vh;
         padding: 14px 16px;
       }
@@ -872,6 +873,21 @@ def build_population_html(places_gdf, cost_mode):
         top: 33px;
         z-index: 1;
       }
+      .export-btn {
+        font-size: 12px;
+        padding: 4px 12px;
+        border: 1px solid #4a90d9;
+        border-radius: 4px;
+        background: #4a90d9;
+        color: #fff;
+        cursor: pointer;
+        margin-left: 12px;
+        font-weight: 400;
+        vertical-align: middle;
+      }
+      .export-btn:hover {
+        background: #3a7bc8;
+      }
     </style>
     """
     filter_script = """
@@ -995,6 +1011,34 @@ def build_population_html(places_gdf, cost_mode):
           menu.classList.remove("open");
         }
       });
+      var exportBtn = document.getElementById("export-csv-btn");
+      if (exportBtn) {
+        exportBtn.addEventListener("click", function() {
+          var headers = [];
+          var headerCells = table.querySelectorAll("thead tr:first-child th");
+          headerCells.forEach(function(th) { headers.push(th.textContent.trim()); });
+          var csvRows = [headers.join(";")];
+          rows.forEach(function(r) {
+            if (r.style.display === "none") return;
+            var cells = [];
+            r.querySelectorAll("td").forEach(function(td) {
+              var val = td.textContent.trim().replace(/"/g, '""');
+              cells.push('"' + val + '"');
+            });
+            csvRows.push(cells.join(";"));
+          });
+          var bom = "\uFEFF";
+          var csv = bom + csvRows.join("\n");
+          var blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = "population_data.csv";
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+
     })();
     </script>
     """
