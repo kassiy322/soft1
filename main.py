@@ -639,13 +639,7 @@ def deduplicate_places(places_gdf):
         return places_gdf
 
     places = places_gdf.copy()
-    places["_dedupe_key"] = (
-        places["normalized_name"]
-        + "|"
-        + places.geometry.x.round(1).astype(str)
-        + "|"
-        + places.geometry.y.round(1).astype(str)
-    )
+    places["_dedupe_key"] = places["normalized_name"]
     places["_has_population"] = places["source_population"].notna()
     places = places.sort_values(
         by=["_has_population", "normalized_name"],
