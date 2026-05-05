@@ -677,7 +677,7 @@ def build_population_html(places_gdf, cost_mode):
         rows = []
         for _, row in display_df.iterrows():
             rows.append(
-                f"<tr data-type=\"{escape(str(row['place_type'] or ''))}\">"
+                f"<tr data-type=\"{escape(str(row['place_type'] or ''))}\" data-name=\"{escape(str(row['name'])).lower()}\" data-pop=\"{row.get('population', 0) if pd.notna(row.get('population')) else 0}\" data-dist=\"{row['reach_display']}\">"
                 f"<td>{escape(str(row['name']))}</td>"
                 f"<td>{escape(str(row['place_type'] or '—'))}</td>"
                 f"<td>{row['lat']:.5f}</td>"
@@ -703,12 +703,12 @@ def build_population_html(places_gdf, cost_mode):
               <th>{metric_header}</th>
             </tr>
             <tr class="filter-row">
-              <th></th>
+              <th><input type="text" id="name-filter" placeholder="\u041f\u043e\u0438\u0441\u043a..." class="filter-input"></th>
               <th><div class="filter-dropdown" id="type-filter-wrap"><button class="filter-btn" id="type-filter-btn">\u0412\u0441\u0435 \u25bc</button><div class="filter-menu" id="type-filter-menu"></div></div></th>
               <th></th>
               <th></th>
-              <th></th>
-              <th></th>
+              <th><button class="sort-btn" id="sort-pop-btn">\u21c5</button></th>
+              <th><button class="sort-btn" id="sort-dist-btn">\u21c5</button></th>
             </tr>
           </thead>
           <tbody>{rows_html}</tbody>
@@ -843,6 +843,28 @@ def build_population_html(places_gdf, cost_mode):
         border-top: 1px solid #e0e0e0;
         margin: 4px 0;
       }
+      .filter-input {
+        width: 100%;
+        font-size: 12px;
+        padding: 4px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .filter-input:focus {
+        outline: 2px solid #4a90d9;
+      }
+      .sort-btn {
+        font-size: 14px;
+        padding: 2px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .sort-btn:hover {
+        background: #f0f0f0;
+      }
       #population-table-panel thead th:first-child {
         top: 0;
       }
@@ -898,25 +920,50 @@ def build_population_html(places_gdf, cost_mode):
         checkboxes.push(cb);
       });
 
+      var nameInput = document.getElementById("name-filter");
+      var sortPopBtn = document.getElementById("sort-pop-btn");
+      var sortDistBtn = document.getElementById("sort-dist-btn");
+      var popSortDir = 0;
+      var distSortDir = 0;
+
       function applyFilter() {
         var active = [];
         checkboxes.forEach(function(cb) {
           if (cb.checked) active.push(cb.value);
         });
-        var showAll = active.length === sortedTypes.length;
+        var typeAll = active.length === sortedTypes.length;
+        var nameQuery = nameInput ? nameInput.value.toLowerCase().trim() : "";
         rows.forEach(function(r) {
           var t = (r.getAttribute("data-type") || "").trim();
-          r.style.display = (showAll || active.indexOf(t) !== -1) ? "" : "none";
+          var n = r.getAttribute("data-name") || "";
+          var typeOk = typeAll || active.indexOf(t) !== -1;
+          var nameOk = !nameQuery || n.indexOf(nameQuery) !== -1;
+          r.style.display = (typeOk && nameOk) ? "" : "none";
         });
-        if (showAll) {
+        if (typeAll) {
           btn.textContent = "\u0412\u0441\u0435 \u25bc";
         } else if (active.length === 0) {
           btn.textContent = "\u041d\u0435\u0442 \u25bc";
         } else {
           btn.textContent = active.join(", ") + " \u25bc";
         }
-        allCb.checked = showAll;
+        allCb.checked = typeAll;
       }
+
+      function sortTable(attr, dirRef, btnEl) {
+        dirRef.dir = (dirRef.dir || 0) === 1 ? -1 : 1;
+        var d = dirRef.dir;
+        btnEl.textContent = d === 1 ? "\u25b2" : "\u25bc";
+        rows.sort(function(a, b) {
+          var va = parseFloat(a.getAttribute(attr)) || 0;
+          var vb = parseFloat(b.getAttribute(attr)) || 0;
+          return (va - vb) * d;
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+      }
+
+      var popSort = {dir: 0};
+      var distSort = {dir: 0};
 
       allCb.addEventListener("change", function() {
         checkboxes.forEach(function(cb) { cb.checked = allCb.checked; });
@@ -926,6 +973,17 @@ def build_population_html(places_gdf, cost_mode):
       checkboxes.forEach(function(cb) {
         cb.addEventListener("change", applyFilter);
       });
+
+      if (nameInput) {
+        nameInput.addEventListener("input", applyFilter);
+      }
+
+      if (sortPopBtn) {
+        sortPopBtn.addEventListener("click", function() { sortTable("data-pop", popSort, sortPopBtn); });
+      }
+      if (sortDistBtn) {
+        sortDistBtn.addEventListener("click", function() { sortTable("data-dist", distSort, sortDistBtn); });
+      }
 
       btn.addEventListener("click", function(e) {
         e.stopPropagation();
